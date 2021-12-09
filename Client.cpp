@@ -119,24 +119,18 @@ bool Client::readAnswer() {
         cached_data->unsubscribe(client_socket);
         return false;
     }
-    auto cache_len = cached_data->getRecordSize();
-    size_t read_len;
-    if (cache_len - current_pos > BUFFER_SIZE) {
-        read_len = BUFFER_SIZE;
-    } else {
-        read_len = cache_len - current_pos;
-    }
-    if (read_len == 0) {
-        logger->debug(TAG, "No new data in cache");
-        if (!cached_data->isFull()) {
-            proxy->disableSoc(client_socket);
-        } else {
-            return false;
-        }
-        return true;
-    }
-    logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
+    unsigned long read_len = 0;
+//    if (read_len == 0) {
+//        logger->debug(TAG, "No new data in cache");
+//        if (!cached_data->isFull()) {
+//            proxy->disableSoc(client_socket);
+//        } else {
+//            return false;
+//        }
+//        return true;
+//    }
     auto data = cached_data->getPart(current_pos, read_len);
+    logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
     current_pos += read_len;
     ssize_t bytes_sent = 0;
     while (bytes_sent != read_len) {

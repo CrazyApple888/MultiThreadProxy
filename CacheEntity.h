@@ -6,6 +6,8 @@
 
 #include "Logger.h"
 
+#define BUFFER_SIZE (BUFSIZ * 5)
+
 class CacheEntity {
 private:
     std::string TAG;
@@ -16,13 +18,17 @@ private:
     bool is_valid = true;
     bool _isUpdated = false;
 
+    pthread_mutex_t mutex;
+    pthread_cond_t cond;
+    unsigned long countOutputSize(unsigned long pos);
+
 public:
 
     std::vector<int> &getSubscribers();
 
     bool isUpdated();
 
-    bool isValid() const;
+    bool isValid();
 
     void setInvalid();
 
@@ -30,11 +36,11 @@ public:
 
     ~CacheEntity();
 
-    const char *getPart(unsigned long start, unsigned long length);
+    const char *getPart(unsigned long start, unsigned long& length);
 
     size_t getRecordSize();
 
-    bool isFull() const;
+    bool isFull();
 
     bool expandData(const char *newData, size_t len);
 

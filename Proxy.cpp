@@ -81,13 +81,11 @@ void Proxy::testRead(int fd) {
 }
 
 void Proxy::disconnectClient(struct pollfd client, size_t index) {
-    //auto _client = handlers.at(client.fd);
     handlers.erase(client.fd);
     auto iter = clientsPollFd.begin() + index;
     logger->debug(TAG, "Deleting pollfd with soc = " + std::to_string(iter->fd));
     clientsPollFd.erase(iter);
     close(client.fd);
-    //delete _client;
     logger->info(TAG, "Disconnected client with descriptor " + std::to_string(client.fd));
 }
 

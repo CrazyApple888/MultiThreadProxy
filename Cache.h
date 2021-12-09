@@ -4,10 +4,11 @@
 #include <iostream>
 #include <map>
 #include "CacheEntity.h"
+#include "ConcurrentMap.h"
 
 class Cache {
 private:
-    std::map<std::string, CacheEntity*> cached_data;
+    ConcurrentMap<std::string, CacheEntity*> cached_data;
     Logger *logger;
     std::string TAG;
 public:

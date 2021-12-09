@@ -30,4 +30,20 @@ int main(int argc, char *argv[]) {
 
     std::cout << "Work finished" << std::endl;
     return EXIT_SUCCESS;
+
+
+
+    /*//test :)
+    auto myMap = new ConcurrentMap<std::string, Handler*>();
+    auto client = new Client(1, true, nullptr);
+    myMap->put("aboba", client);
+    auto value = myMap->get("aboba");
+    std::cout << value << std::endl;
+    myMap->removeAt("aboba");
+    try {
+        value = myMap->get("aboba");
+    } catch (std::exception exc) {
+        std::cout << exc.what() << std::endl;
+    }
+    std::cout << value << std::endl;*/
 }
