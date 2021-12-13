@@ -3,15 +3,12 @@
 
 
 #include <string>
-#include "Handler.h"
 #include "Logger.h"
-#include "Proxy.h"
 #include "http_parser.h"
 #include "Server.h"
+#include "Cache.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
-
-class Proxy;
 
 class Server;
 
@@ -20,30 +17,39 @@ private:
     char buffer[BUFFER_SIZE];
     std::string TAG;
     Logger *logger;
-    Proxy *proxy;
     http_parser_settings settings{};
     http_parser parser{};
-    Server *server;
 
-    bool readRequest();
-
-    bool readAnswer();
-
+    Cache *cache;
     CacheEntity *cached_data = nullptr;
     size_t current_pos = 0;
 public:
-
     int client_socket;
     std::string url;
     std::string method;
+    std::string host;
 
     std::string h_field = "";
     std::string headers = "";
+    bool isAllParsed = false;
 
     Client() = default;
+
     ~Client();
 
-    Client(int client_socket, bool is_debug, Proxy *proxy);
+    Client(int client_socket, bool is_debug, Cache *_cache);
+
+    void readData();
+
+    bool isCacheExist();
+
+    CacheEntity *createCacheEntity();
+
+    std::string getRequest();
+
+    bool readAnswer();
+
+    bool readRequest();
 
     Logger *getLogger() { return logger; }
 
@@ -51,11 +57,7 @@ public:
 
     bool execute(int event) override;
 
-    bool createServerConnection(const std::string &host);
-
     void addServer(Server *ser);
-
-    void sendServerRequest();
 
     void addCache(CacheEntity *cache);
 };

@@ -24,9 +24,7 @@ int onHeaderValue(http_parser *parser, const char *at, size_t length) {
     auto client = (Client *) parser->data;
     auto value = std::string(at, length);
     if (client->h_field == "Host") {
-        if (!client->createServerConnection(value)) {
-            return 1;
-        }
+        client->host = value;
     }
     if ("Connection" == client->h_field) {
         value = "close";
@@ -37,9 +35,9 @@ int onHeaderValue(http_parser *parser, const char *at, size_t length) {
 }
 
 int onHeadersComplete(http_parser *parser) {
-    //todo rewrite me
     auto client = (Client *) parser->data;
     client->headers.append("\r\n");
+    client->isAllParsed = true;
     client->getLogger()->debug(client->getTag(), "All headers parsed");
     client->getLogger()->debug(client->getTag(), "method = " + std::to_string(parser->method));
     switch (parser->method) {
@@ -52,14 +50,13 @@ int onHeadersComplete(http_parser *parser) {
         default:
             return 1;
     }
-    client->sendServerRequest();
+
     return 0;
 }
 
-Client::Client(int client_socket, bool is_debug, Proxy *proxy) : logger(new Logger(is_debug)) {
-    ///-------------------Initializing fields-------------------
+Client::Client(int client_socket, bool is_debug, Cache *_cache) : logger(new Logger(is_debug)) {
+    this->cache = _cache;
     this->client_socket = client_socket;
-    this->proxy = proxy;
     TAG = std::string("Client " + std::to_string(client_socket));
 
     ///---------Initializing parser settings---------
@@ -90,18 +87,54 @@ bool Client::execute(int event) {
     return false;
 }
 
+/**
+ * Creates CacheEntity if it doesn't exist
+ * @return CacheEntity* or nullptr if no enough space
+ */
+CacheEntity *Client::createCacheEntity() {
+    if ((this->cached_data = cache->getEntity(this->url)) == nullptr) {
+        this->cached_data = cache->createEntity(url);
+    }
+
+    return this->cached_data;
+}
+
+bool Client::isCacheExist() {
+    if (cache->getEntity(this->url) == nullptr) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+std::string Client::getRequest() {
+    std::string get_this;
+    get_this.append(method);
+    get_this.append(" ");
+    get_this.append(url);
+    get_this.append(" HTTP/1.0\r\n");
+    get_this.append(headers);
+
+    return get_this;
+}
+
 bool Client::readRequest() {
-    auto len = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    //todo >
-    if (0 >= len) {
-        logger->debug(TAG, "len from recv <= 0");
-        return false;
+    long len;
+    logger->debug(TAG, "Reading request");
+    while (!isAllParsed) {
+        len = recv(client_socket, buffer, BUFFER_SIZE, 0);
+        if (len <= 0) {
+            logger->debug(TAG, "BEFORE BREAK " + std::to_string(len));
+            break;
+        }
+        logger->info(TAG, "ab");
+        auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
+        if (parsed_len != len || 0u != parser.http_errno) {
+            logger->debug(TAG, "parser errno = " + std::to_string(parser.http_errno));
+            break;
+        }
     }
-    auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
-    if (parsed_len != len || 0u != parser.http_errno) {
-        logger->debug(TAG, "parser errno = " + std::to_string(parser.http_errno));
-        return false;
-    }
+    logger->info(TAG, "Request is read");
 
     return true;
 }
@@ -110,7 +143,7 @@ bool Client::readAnswer() {
     logger->debug(TAG, "READING FROM CACHE");
     if (nullptr == cached_data) {
         logger->info(TAG, "BROKEN CACHE");
-        proxy->disableSoc(client_socket);
+        //proxy->disableSoc(client_socket);
         return true;
         //return false;
     }
@@ -155,22 +188,14 @@ bool Client::readAnswer() {
     logger->debug(TAG, "Completed reading from cache");
 
     if (!cached_data->isFull()) {
-        proxy->disableSoc(client_socket);
+        //proxy->disableSoc(client_socket);
     }
 
     return true;
 }
 
-bool Client::createServerConnection(const std::string &host) {
-    return proxy->createServerConnection(host, this);
-}
-
 void Client::addServer(Server *ser) {
-    this->server = ser;
-}
-
-void Client::sendServerRequest() {
-    server->sendRequest(url.data(), headers.data(), method.data());
+    //this->server = ser;
 }
 
 void Client::addCache(CacheEntity *cache) {
@@ -180,5 +205,40 @@ void Client::addCache(CacheEntity *cache) {
 }
 
 Client::~Client() {
+    close(client_socket);
     delete logger;
+}
+
+void Client::readData() {
+    logger->debug(TAG, "Reading data...");
+    current_pos = 0;
+    unsigned long read_len;
+
+    if (cached_data == nullptr || !cached_data->isValid()) {
+        return;
+    }
+
+    while (true) {
+        auto data = cached_data->getPart(current_pos, read_len);
+        logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
+
+        current_pos += read_len;
+        ssize_t bytes_sent = 0;
+        while (bytes_sent != read_len) {
+            ssize_t sent = send(client_socket, data + bytes_sent, read_len, 0);
+            if (0 > sent) {
+                logger->debug(TAG, "Send returned value < 0");
+                return;
+            }
+            if (0 == sent) {
+                return;
+            }
+            bytes_sent += sent;
+        }
+
+        if ((cached_data->isFull() && current_pos == cached_data->getRecordSize())
+            || !cached_data->isValid()) {
+            break;
+        }
+    }
 }

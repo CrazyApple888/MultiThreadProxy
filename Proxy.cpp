@@ -1,12 +1,53 @@
 #include "Proxy.h"
 
+void *serverRoutine(void *arg) {
+    auto *server = (Server *) arg;
+    server->sendRequest();
+    server->readFromServer();
+
+    delete server;
+    return nullptr;
+}
+
+void *clientRoutine(void *arg) {
+    auto *client = (Client *) arg;
+    client->readRequest();
+
+    client->getLogger()->debug(client->getTag(), "Getting cache");
+
+    //If cache exists, read it and die
+    if (client->isCacheExist()) {
+        client->createCacheEntity();
+        client->readData();
+        delete client;
+        return nullptr;
+    }
+
+    //Else
+    auto *cache = client->createCacheEntity();
+    if (cache == nullptr) {
+        client->getLogger()->debug(client->getTag(), "CACHE IS NULLPTR");
+        return (void *) 1;
+    }
+    client->getLogger()->debug(client->getTag(), "Got CacheEntity, creating server routine");
+    auto *server = new Server(client->getRequest(), client->host, cache, client->getLogger()->isDebug());
+    pthread_t server_thread;
+    pthread_create(&server_thread, nullptr, serverRoutine, (void *) server);
+    pthread_detach(server_thread);
+
+    client->readData();
+
+    delete client;
+    return nullptr;
+}
+
 Proxy::Proxy(bool is_debug) : logger(new Logger(is_debug)) {
     this->cache = new Cache(is_debug);
 }
 
 int Proxy::start(int port) {
 
-    std::vector<int> subs;
+    //std::vector<int> subs;
 
     this->proxy_port = port;
     if (1 == initProxySocket()) {
@@ -14,10 +55,16 @@ int Proxy::start(int port) {
         return 1;
     }
     initProxyPollFd();
-
-    int events_activated;
     while (!is_stopped) {
-        events_activated = poll(clientsPollFd.data(), clientsPollFd.size(), -1);
+
+        poll(&clientsPollFd[0], 1, -1);
+        auto client = acceptClient();
+        pthread_t client_thread;
+        pthread_create(&client_thread, nullptr, clientRoutine, (void *) client);
+        pthread_detach(client_thread);
+        clientsPollFd[0].revents = 0;
+
+        /*events_activated = poll(clientsPollFd.data(), clientsPollFd.size(), -1);
         if (events_activated <= 0) {
             logger->info(TAG, "EVENTS = " + std::to_string(events_activated));
             break;
@@ -67,7 +114,7 @@ int Proxy::start(int port) {
             notify(sub);
         }
         subs.clear();
-
+*/
     }
 
     logger->info(TAG, "proxy finished");
@@ -89,24 +136,25 @@ void Proxy::disconnectClient(struct pollfd client, size_t index) {
     logger->info(TAG, "Disconnected client with descriptor " + std::to_string(client.fd));
 }
 
-void Proxy::acceptClient() {
+Client *Proxy::acceptClient() {
     int client_socket;
-    //todo may be made it nonblock
     if ((client_socket = accept(proxy_socket, nullptr, nullptr)) < 0) {
         logger->info(TAG, "Can't accept client");
-        return;
+        return nullptr;
     }
-    auto client = new Client(client_socket, logger->isDebug(), this);
-    handlers.insert(std::make_pair(client_socket, client));
-    initClientPollFd(client_socket);
+    auto client = new Client(client_socket, logger->isDebug(), cache);
+
+    //initClientPollFd(client_socket);
     logger->info(TAG, "Accepted new client with descriptor " + std::to_string(client_socket));
+
+    return client;
 }
 
 void Proxy::initClientPollFd(int socket) {
     struct pollfd client{
-        .fd = socket,
-        .events = POLLIN | POLLHUP,
-        .revents = 0
+            .fd = socket,
+            .events = POLLIN | POLLHUP,
+            .revents = 0
     };
 
     clientsPollFd.push_back(client);
@@ -155,7 +203,7 @@ int Proxy::initProxySocket() {
 }
 
 Proxy::~Proxy() {
-    for (auto &item : clientsPollFd) {
+    for (auto &item: clientsPollFd) {
         close(item.fd);
     }
     for (auto i = 0; i < handlers.size(); i++) {
@@ -196,15 +244,15 @@ bool Proxy::createServerConnection(const std::string &host, Client *client) {
     logger->info(TAG, "Connected server to " + host);
 
     initClientPollFd(soc);
-    auto server = new Server(soc, logger->isDebug(), this);
-    handlers.insert(std::make_pair(soc, server));
-
-    client->addServer(server);
-    server->client_soc = client->client_socket;
-
-    logger->info(TAG, "Added server with descriptor " + std::to_string(soc));
-
-    //
+//    auto server = new Server(soc, logger->isDebug(), this);
+//    handlers.insert(std::make_pair(soc, server));
+//
+//    client->addServer(server);
+//    server->client_soc = client->client_socket;
+//
+//    logger->info(TAG, "Added server with descriptor " + std::to_string(soc));
+//
+//
     free(hostinfo);
     return true;
 }

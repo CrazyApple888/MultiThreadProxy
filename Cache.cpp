@@ -4,9 +4,9 @@
  * @return On success - Entity, otherwise - nullptr
  **/
 CacheEntity *Cache::getEntity(const std::string &url) {
-    try {
+    if (cached_data.contains(url)) {
         return cached_data.get(url);
-    } catch (std::out_of_range &exc) {
+    } else {
         return nullptr;
     }
 }

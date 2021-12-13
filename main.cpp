@@ -4,18 +4,18 @@
 
 Proxy *proxy = nullptr;
 
-void handleSigint(int sig) {
+/*void handleSigint(int sig) {
     if (SIGINT == sig && nullptr != proxy) {
         proxy->stop();
     } else {
         exit(EXIT_SUCCESS);
     }
-}
+}*/
 
 /// $ prog_name port is_debug
 int main(int argc, char *argv[]) {
     sigset(SIGPIPE, SIG_IGN);
-    sigset(SIGINT, handleSigint);
+    //sigset(SIGINT, handleSigint);
     bool is_debug = (argc == 3 && strcmp("-d", argv[2]) == 0);
     int port;
     try {

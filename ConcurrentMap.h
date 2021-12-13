@@ -1,6 +1,7 @@
 #ifndef MULTITHREADPROXY_CONCURRENTMAP_H
 #define MULTITHREADPROXY_CONCURRENTMAP_H
 
+#include <iostream>
 #include <map>
 
 template<typename K, typename V>
@@ -18,20 +19,36 @@ public:
         data.clear();
     };
 
+    bool contains(K key) {
+        pthread_mutex_lock(&mutex);
+        auto isContains = data.find(key) != data.end();
+        pthread_mutex_unlock(&mutex);
+
+        return isContains;
+    }
+
     V get(K key) {
         pthread_mutex_lock(&mutex);
-        auto value = data.at(key);
+        V value;
+        try {
+            value = data.at(key);
+        } catch (...) {}
         pthread_mutex_unlock(&mutex);
 
         return value;
     };
 
-    V get(int index) {
-        pthread_mutex_lock(&mutex);
-        auto value = data[index];
-        pthread_mutex_unlock(&mutex);
+    V getUnsafe(K key) {
+        V value;
+        try {
+            value = data.at(key);
+        } catch (...) {}
 
         return value;
+    };
+
+    bool containsUnsafe(K key) {
+        return data.find(key) != data.end();
     }
 
     void removeAt(K key) {
@@ -42,7 +59,11 @@ public:
 
     void put(K key, V value) {
         pthread_mutex_lock(&mutex);
-        data.insert(std::make_pair(key, value));
+        try {
+            data.insert(std::make_pair(key, value));
+        } catch (...) {
+            std::cerr << "ALO" << std::endl;
+        }
         pthread_mutex_unlock(&mutex);
     };
 

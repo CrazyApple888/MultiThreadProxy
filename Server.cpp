@@ -6,7 +6,7 @@ bool Server::execute(int event) {
         if (cache->isFull() || is_first_run) {
             logger->debug(TAG, "Cache is full, subscribing client");
             cache->subscribe(client_soc);
-            proxy->addCacheToClient(client_soc, cache);
+            //proxy->addCacheToClient(client_soc, cache);
             return false;
         }
     }
@@ -34,7 +34,7 @@ bool Server::execute(int event) {
         logger->debug(TAG, "CACHE != NULLPTR");
         if (!is_client_subscribed) {
             cache->subscribe(client_soc);
-            proxy->addCacheToClient(client_soc, cache);
+            //proxy->addCacheToClient(client_soc, cache);
             is_client_subscribed = true;
         }
 
@@ -48,19 +48,19 @@ bool Server::execute(int event) {
         } else {
             logger->debug(TAG, "CACHE IS FULL");
             cache->subscribe(client_soc);
-            proxy->addCacheToClient(client_soc, cache);
+            //proxy->addCacheToClient(client_soc, cache);
             return false;
         }
 
     } else {
-        cache = proxy->getCache()->createEntity(url);
+        //cache = proxy->getCache()->createEntity(url);
         if (nullptr == cache) {
             logger->info(TAG, "Can't create cache entity for " + url);
             return false;
         }
         if (!is_client_subscribed) {
             cache->subscribe(client_soc);
-            proxy->addCacheToClient(client_soc, cache);
+            //proxy->addCacheToClient(client_soc, cache);
             is_client_subscribed = true;
         }
         if (!cache->expandData(buffer, len)) {
@@ -75,25 +75,70 @@ bool Server::execute(int event) {
     return true;
 }
 
-Server::Server(int server_socket, bool is_debug, Proxy *proxy) : logger(new Logger(is_debug)), proxy(proxy) {
-    this->server_socket = server_socket;
+Server::Server(const std::string &_request, const std::string &_host, CacheEntity *_cache, bool is_debug) : logger(new Logger(is_debug)) {
+    this->request = _request;
+    this->cache = _cache;
+    this->host = _host;
     TAG = std::string("SERVER " + std::to_string(server_socket));
     logger->debug(TAG, "created");
 }
 
-void Server::sendRequest(const char *url1, const char *headers, const char *method) {
-    this->url = std::string(url1);
-    auto get_this = std::string(method);
-    get_this.append(" ");
-    get_this.append(url);
-    get_this.append(" HTTP/1.0\r\n");
+void Server::sendRequest() {
 
-    auto _headers = std::string(headers);
-    get_this.append(_headers);
-    send(server_socket, get_this.data(), get_this.size(), 0);
-    this->cache = proxy->getCache()->getEntity(url);
+    logger->info(TAG, "Host = " + host);
+    struct hostent *hostinfo = gethostbyname(host.data());
+    if (nullptr == hostinfo) {
+        return;
+    }
+
+    if ((server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+        logger->info(TAG, "Can't create socket for host" + host);
+        return;
+    }
+
+    struct sockaddr_in sockaddrIn{};
+    sockaddrIn.sin_family = AF_INET;
+    sockaddrIn.sin_port = htons(80);
+    sockaddrIn.sin_addr = *((struct in_addr *) hostinfo->h_addr);
+
+    logger->debug(TAG, "Connecting server to " + host);
+    if (-1 == (connect(server_socket, (struct sockaddr *) &sockaddrIn, sizeof(sockaddrIn)))) {
+        logger->info(TAG, "Can't create connection to " + host);
+        free(hostinfo);
+        return;
+    }
+    logger->info(TAG, "Connected server to " + host);
+    free(hostinfo);
+
+    send(server_socket, request.data(), request.size(), 0);
 }
 
 Server::~Server() {
+    close(server_socket);
     delete logger;
+}
+
+void Server::readFromServer() {
+    while (true) {
+        auto len = recv(server_socket, buffer, BUFFER_SIZE, 0);
+        if (len < 0) {
+            if (cache != nullptr) {
+                cache->setInvalid();
+            }
+            logger->debug(TAG, "LEN < 0");
+            return;
+        }
+        if (len == 0) {
+            logger->debug(TAG, "Setting status FULL to cache for " + url);
+            cache->setFull();
+            return;
+        }
+
+        if (!cache->expandData(buffer, len)) {
+            logger->info(TAG, "Can't allocate memory for " + url);
+            cache->setInvalid();
+            return;
+        }
+
+    }
 }

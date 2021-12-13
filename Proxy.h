@@ -43,7 +43,7 @@ private:
 
     void initProxyPollFd();
 
-    void acceptClient();
+    Client* acceptClient();
 
     void initClientPollFd(int socket);
 

@@ -42,7 +42,7 @@ bool CacheEntity::expandData(const char *newData, size_t len) {
     pthread_mutex_lock(&mutex);
     try {
         data.insert(data.end(), newData, newData + len);
-        logger->info(TAG, std::string("cache capacity: ") + std::to_string(data.capacity()));
+        //logger->info(TAG, std::string("cache capacity: ") + std::to_string(data.capacity()));
         _isUpdated = true;
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex);

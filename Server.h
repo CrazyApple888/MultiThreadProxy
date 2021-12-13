@@ -20,21 +20,24 @@ private:
     int server_socket;
     std::string TAG;
     Logger *logger;
-    Proxy *proxy;
     std::string url;
     bool is_client_subscribed = false;
     CacheEntity *cache = nullptr;
     bool is_first_run = true;
+    std::string request;
+    std::string host;
 public:
     int client_soc;
 
-    Server(int server_socket, bool is_debug, Proxy *proxy);
+    Server(const std::string &_request, const std::string &_host, CacheEntity *_cache, bool is_debug);
 
     ~Server();
 
     bool execute(int event) override;
 
-    void sendRequest(const char *url1, const char *headers, const char *method);
+    void sendRequest();
+
+    void readFromServer();
 };
 
 
