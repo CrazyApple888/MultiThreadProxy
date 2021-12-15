@@ -17,6 +17,7 @@
 #include <sys/un.h>
 #include <algorithm>
 #include <bitset>
+#include <pthread.h>
 
 #include "Logger.h"
 #include "Handler.h"
@@ -34,6 +35,7 @@ private:
     const int backlog = 20;
     int proxy_port;
     int proxy_socket;
+    struct pollfd proxy_fd;
     std::vector<struct pollfd> clientsPollFd;
     std::map<int, Handler *> handlers;
     Cache *cache;
@@ -43,13 +45,7 @@ private:
 
     void initProxyPollFd();
 
-    Client* acceptClient();
-
-    void initClientPollFd(int socket);
-
-    void testRead(int fd);
-
-    void disconnectClient(pollfd client, size_t index);
+    Client *acceptClient();
 
 public:
 
@@ -60,10 +56,6 @@ public:
     ~Proxy();
 
     int start(int port);
-
-    bool createServerConnection(const std::string &host, Client *client);
-
-    void disconnectSocket(int soc);
 
     void notify(int soc);
 

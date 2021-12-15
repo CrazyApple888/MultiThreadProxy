@@ -3,7 +3,7 @@
 const char *CacheEntity::getPart(unsigned long start, unsigned long &length) {
     pthread_mutex_lock(&mutex);
     length = countOutputSize(start);
-    while (length <= 0 && !is_full) {
+    while (length <= 0 && !is_full && is_valid) {
         pthread_cond_wait(&cond, &mutex);
         length = countOutputSize(start);
     }
@@ -42,13 +42,13 @@ bool CacheEntity::expandData(const char *newData, size_t len) {
     pthread_mutex_lock(&mutex);
     try {
         data.insert(data.end(), newData, newData + len);
-        //logger->info(TAG, std::string("cache capacity: ") + std::to_string(data.capacity()));
         _isUpdated = true;
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex);
         return true;
     } catch (std::bad_alloc &exc) {
         logger->info(TAG, "bad alloc");
+        is_valid = false;
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex);
         return false;

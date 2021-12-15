@@ -11,7 +11,14 @@ void *serverRoutine(void *arg) {
 
 void *clientRoutine(void *arg) {
     auto *client = (Client *) arg;
-    client->readRequest();
+    if (client == nullptr) {
+        return (void *) 1;
+    }
+    if (!client->readRequest()) {
+        client->getLogger()->info(client->getTag(), "Unable to read request");
+        delete client;
+        return (void *) 1;
+    }
 
     client->getLogger()->debug(client->getTag(), "Getting cache");
 
@@ -27,13 +34,27 @@ void *clientRoutine(void *arg) {
     auto *cache = client->createCacheEntity();
     if (cache == nullptr) {
         client->getLogger()->debug(client->getTag(), "CACHE IS NULLPTR");
+        delete client;
         return (void *) 1;
     }
     client->getLogger()->debug(client->getTag(), "Got CacheEntity, creating server routine");
     auto *server = new Server(client->getRequest(), client->host, cache, client->getLogger()->isDebug());
     pthread_t server_thread;
-    pthread_create(&server_thread, nullptr, serverRoutine, (void *) server);
-    pthread_detach(server_thread);
+
+    if (0 != pthread_create(&server_thread, nullptr, serverRoutine, (void *) server)) {
+        client->getLogger()->info(client->getTag(), "Unable to start server routine");
+        delete client;
+        return (void *) 1;
+    }
+    if (0 != pthread_detach(server_thread)) {
+        client->getLogger()->info(client->getTag(),
+                                  "Unable to detach server thread for client " + std::to_string(client->client_socket));
+        if (0 != pthread_cancel(server_thread)) {
+            client->getLogger()->info(client->getTag(),
+                                      "Unable to cancel server thread for client " +
+                                      std::to_string(client->client_socket));
+        }
+    }
 
     client->readData();
 
@@ -46,94 +67,41 @@ Proxy::Proxy(bool is_debug) : logger(new Logger(is_debug)) {
 }
 
 int Proxy::start(int port) {
-
-    //std::vector<int> subs;
-
     this->proxy_port = port;
     if (1 == initProxySocket()) {
         logger->info(TAG, "Can't init socket");
         return 1;
     }
     initProxyPollFd();
+
     while (!is_stopped) {
-
-        poll(&clientsPollFd[0], 1, -1);
+        if (poll(&proxy_fd, 1, -1) < 0) {
+            logger->info(TAG, "Poll returned value < 0:");
+            return 1;
+        }
         auto client = acceptClient();
+        if (client == nullptr) {
+            logger->info(TAG, "Unable to allocate memory for new client");
+            continue;
+        }
         pthread_t client_thread;
-        pthread_create(&client_thread, nullptr, clientRoutine, (void *) client);
-        pthread_detach(client_thread);
-        clientsPollFd[0].revents = 0;
-
-        /*events_activated = poll(clientsPollFd.data(), clientsPollFd.size(), -1);
-        if (events_activated <= 0) {
-            logger->info(TAG, "EVENTS = " + std::to_string(events_activated));
-            break;
+        if (0 != pthread_create(&client_thread, nullptr, clientRoutine, (void *) client)) {
+            logger->info(TAG, "Unable to create new routine for client");
+            close(client->client_socket);
+            delete client;
+            continue;
         }
-        logger->debug(TAG, "Events activated = " + std::to_string(events_activated));
-        ///New client
-        if (POLLIN == clientsPollFd[0].revents) {
-            logger->debug(TAG, "Proxy POLLIN " + std::to_string(clientsPollFd[0].revents));
-            clientsPollFd[0].revents = 0;
-            acceptClient();
-        }
-
-        ///Checking for new messages from clients
-        for (auto i = 1; i < clientsPollFd.size(); i++) {
-            logger->debug(TAG, "KAVO");
-            //todo maybe ==, maybe without POLLOUT
-            if ((POLLIN | POLLOUT) & clientsPollFd[i].revents) {
-                bool is_success = false;
-                try {
-                    is_success = handlers.at(clientsPollFd[i].fd)->execute(clientsPollFd[i].revents);
-                } catch (std::out_of_range &exc) {
-                    logger->info(TAG, R"(GOT FATAL EXCEPTION \/\/\/\/\/\/, SHUTTING DOWN...)");
-                    logger->info(TAG, exc.what());
-                    return 1;
-                }
-                if (!is_success) {
-                    logger->debug(TAG, "Execute isn't successful for" + std::to_string(clientsPollFd[i].fd));
-                    disconnectClient(clientsPollFd[i], i);
-                    continue;
-                }
-
-                if ((POLLHUP | POLLIN) == clientsPollFd[i].revents) {
-                    logger->info(TAG, "POLLHUP | POLLIN " + std::to_string(clientsPollFd[i].revents));
-                    disconnectClient(clientsPollFd[i], i);
-                }
+        if (0 != pthread_detach(client_thread)) {
+            logger->info(TAG, "Unable to detach thread for client " + std::to_string(client->client_socket));
+            if (0 != pthread_cancel(client_thread)) {
+                logger->info(TAG, "Unable to cancel thread for client " + std::to_string(client->client_socket));
             }
-            if ((POLLERR | POLLIN) == clientsPollFd[i].revents) {
-                disconnectClient(clientsPollFd[i], i);
-            }
-
-            clientsPollFd[i].revents = 0;
         }
-        logger->debug(TAG, "Poll iteration completed");
-
-        cache->getUpdatedSubs(subs);
-        for (auto sub : subs) {
-            notify(sub);
-        }
-        subs.clear();
-*/
+        proxy_fd.revents = 0;
     }
 
     logger->info(TAG, "proxy finished");
     return 0;
-}
-
-void Proxy::testRead(int fd) {
-    char buffer[BUFSIZ];
-    read(fd, buffer, BUFSIZ);
-    logger->info(TAG, buffer);
-}
-
-void Proxy::disconnectClient(struct pollfd client, size_t index) {
-    handlers.erase(client.fd);
-    auto iter = clientsPollFd.begin() + index;
-    logger->debug(TAG, "Deleting pollfd with soc = " + std::to_string(iter->fd));
-    clientsPollFd.erase(iter);
-    close(client.fd);
-    logger->info(TAG, "Disconnected client with descriptor " + std::to_string(client.fd));
 }
 
 Client *Proxy::acceptClient() {
@@ -143,30 +111,17 @@ Client *Proxy::acceptClient() {
         return nullptr;
     }
     auto client = new Client(client_socket, logger->isDebug(), cache);
-
-    //initClientPollFd(client_socket);
     logger->info(TAG, "Accepted new client with descriptor " + std::to_string(client_socket));
 
     return client;
 }
 
-void Proxy::initClientPollFd(int socket) {
-    struct pollfd client{
-            .fd = socket,
+void Proxy::initProxyPollFd() {
+    proxy_fd = {
+            .fd = proxy_socket,
             .events = POLLIN | POLLHUP,
             .revents = 0
     };
-
-    clientsPollFd.push_back(client);
-}
-
-void Proxy::initProxyPollFd() {
-    struct pollfd serverFd{};
-    serverFd.fd = proxy_socket;
-    serverFd.events = POLLIN | POLLHUP;
-    serverFd.revents = 0;
-
-    clientsPollFd.push_back(serverFd);
 }
 
 int Proxy::initProxySocket() {
@@ -187,11 +142,6 @@ int Proxy::initProxySocket() {
         logger->info(TAG, "Can't bind socket");
         return 1;
     }
-
-//    if (-1 == fcntl(proxy_socket, F_SETFL, O_NONBLOCK)) {
-//        close(proxy_socket);
-//        return EXIT_FAILURE;
-//    }
 
     if (-1 == listen(proxy_socket, backlog)) {
         close(proxy_socket);
@@ -214,62 +164,6 @@ Proxy::~Proxy() {
     clientsPollFd.clear();
     delete cache;
     delete logger;
-}
-
-bool Proxy::createServerConnection(const std::string &host, Client *client) {
-    logger->info(TAG, "Host = " + host);
-    struct hostent *hostinfo = gethostbyname(host.data());
-    if (nullptr == hostinfo) {
-        return false;
-    }
-
-    int soc;
-    if ((soc = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
-        logger->info(TAG, "Can't create socket for host" + host);
-        return false;
-    }
-
-    struct sockaddr_in sockaddrIn{};
-    sockaddrIn.sin_family = AF_INET;
-    sockaddrIn.sin_port = htons(80);
-    sockaddrIn.sin_addr = *((struct in_addr *) hostinfo->h_addr);
-
-    logger->debug(TAG, "Connecting server to " + host);
-    if (-1 == (connect(soc, (struct sockaddr *) &sockaddrIn, sizeof(sockaddrIn)))) {
-        logger->info(TAG, "Can't create connection to " + host);
-        //--
-        free(hostinfo);
-        return false;
-    }
-    logger->info(TAG, "Connected server to " + host);
-
-    initClientPollFd(soc);
-//    auto server = new Server(soc, logger->isDebug(), this);
-//    handlers.insert(std::make_pair(soc, server));
-//
-//    client->addServer(server);
-//    server->client_soc = client->client_socket;
-//
-//    logger->info(TAG, "Added server with descriptor " + std::to_string(soc));
-//
-//
-    free(hostinfo);
-    return true;
-}
-
-void Proxy::disconnectSocket(int soc) {
-    struct pollfd client{};
-    int index = -1;
-    for (int i = 0; i < clientsPollFd.size(); ++i) {
-        if (clientsPollFd[i].fd == soc) {
-            client = clientsPollFd[i];
-            index = i;
-            break;
-        }
-    }
-    if (index != -1) {
-        disconnectClient(client, index);
-    }
 }
 
 void Proxy::notify(int soc) {

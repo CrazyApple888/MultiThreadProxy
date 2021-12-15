@@ -123,15 +123,19 @@ bool Client::readRequest() {
     logger->debug(TAG, "Reading request");
     while (!isAllParsed) {
         len = recv(client_socket, buffer, BUFFER_SIZE, 0);
-        if (len <= 0) {
-            logger->debug(TAG, "BEFORE BREAK " + std::to_string(len));
+        if (len < 0) {
+            logger->info(TAG, "Recv returned value < 0");
+            return false;
+        }
+        if (len == 0) {
+            logger->debug(TAG, "No data from server");
             break;
         }
         logger->info(TAG, "ab");
         auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
         if (parsed_len != len || 0u != parser.http_errno) {
             logger->debug(TAG, "parser errno = " + std::to_string(parser.http_errno));
-            break;
+            return false;
         }
     }
     logger->info(TAG, "Request is read");
