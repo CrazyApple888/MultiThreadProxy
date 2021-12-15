@@ -20,13 +20,9 @@
 #include <pthread.h>
 
 #include "Logger.h"
-#include "Handler.h"
 #include "Client.h"
+#include "Server.h"
 #include "Cache.h"
-
-class Client;
-
-class Cache;
 
 class Proxy {
 private:
@@ -36,8 +32,6 @@ private:
     int proxy_port;
     int proxy_socket;
     struct pollfd proxy_fd;
-    std::vector<struct pollfd> clientsPollFd;
-    std::map<int, Handler *> handlers;
     Cache *cache;
     bool is_stopped = false;
 
@@ -57,13 +51,7 @@ public:
 
     int start(int port);
 
-    void notify(int soc);
-
     Cache *getCache();
-
-    void addCacheToClient(int soc, CacheEntity *cache_entity);
-
-    void disableSoc(int soc);
 
 };
 

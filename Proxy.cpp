@@ -37,6 +37,7 @@ void *clientRoutine(void *arg) {
         delete client;
         return (void *) 1;
     }
+    cache->subscribe();
     client->getLogger()->debug(client->getTag(), "Got CacheEntity, creating server routine");
     auto *server = new Server(client->getRequest(), client->host, cache, client->getLogger()->isDebug());
     pthread_t server_thread;
@@ -57,6 +58,7 @@ void *clientRoutine(void *arg) {
     }
 
     client->readData();
+    client->getLogger()->info(client->getTag(), "Client shutting down");
 
     delete client;
     return nullptr;
@@ -153,59 +155,13 @@ int Proxy::initProxySocket() {
 }
 
 Proxy::~Proxy() {
-    for (auto &item: clientsPollFd) {
-        close(item.fd);
-    }
-    for (auto i = 0; i < handlers.size(); i++) {
-        delete handlers[i];
-    }
-    handlers.erase(handlers.begin(), handlers.end());
     close(proxy_socket);
-    clientsPollFd.clear();
     delete cache;
     delete logger;
 }
 
-void Proxy::notify(int soc) {
-    for (auto &item: clientsPollFd) {
-        if (soc == item.fd) {
-            item.events |= POLLOUT;
-            break;
-        }
-    }
-}
-
-void Proxy::disableSoc(int soc) {
-    for (auto &item: clientsPollFd) {
-        if (soc == item.fd) {
-            item.events &= ~POLLOUT;
-            break;
-        }
-    }
-}
-
 Cache *Proxy::getCache() {
     return cache;
-}
-
-void Proxy::addCacheToClient(int soc, CacheEntity *cache_entity) {
-    logger->debug(TAG, "addCacheToClient " + std::to_string(soc));
-    for (auto &item: clientsPollFd) {
-        if (soc == item.fd) {
-            logger->debug(TAG, "addCacheToClient" + std::string("SOC == FD"));
-            try {
-                logger->debug(TAG, "!");
-                auto _client = handlers.at(soc);
-                logger->debug(TAG, "!");
-                dynamic_cast<Client *>(_client)->addCache(cache_entity);
-                logger->debug(TAG, "!!!");
-            } catch (...) {
-                logger->info(TAG, "ADD CACHE TO CLIENT GOT EXCEPTION, SOCKET = " + std::to_string(soc));
-                exit(EXIT_FAILURE);
-            }
-            break;
-        }
-    }
 }
 
 void Proxy::stop() {

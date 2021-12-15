@@ -5,14 +5,11 @@
 #include <string>
 #include "Logger.h"
 #include "http_parser.h"
-#include "Server.h"
 #include "Cache.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
-class Server;
-
-class Client : public Handler {
+class Client {
 private:
     char buffer[BUFFER_SIZE];
     std::string TAG;
@@ -47,19 +44,11 @@ public:
 
     std::string getRequest();
 
-    bool readAnswer();
-
     bool readRequest();
 
     Logger *getLogger() { return logger; }
 
     std::string getTag() { return TAG; }
-
-    bool execute(int event) override;
-
-    void addServer(Server *ser);
-
-    void addCache(CacheEntity *cache);
 };
 
 

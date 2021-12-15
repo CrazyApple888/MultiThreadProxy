@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "Logger.h"
+#include "AtomicInt.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
@@ -14,9 +15,8 @@ private:
     std::vector<char> data;
     bool is_full = false;
     Logger *logger;
-    std::vector<int> subscribers;
     bool is_valid = true;
-    bool _isUpdated = false;
+    AtomicInt *subscribers_counter;
 
     pthread_mutex_t mutex;
     pthread_cond_t cond;
@@ -24,13 +24,13 @@ private:
 
 public:
 
-    std::vector<int> &getSubscribers();
-
-    bool isUpdated();
-
     bool isValid();
 
     void setInvalid();
+
+    bool hasSubscribers();
+
+    void remake();
 
     CacheEntity(const std::string &url, bool is_debug);
 
@@ -44,11 +44,11 @@ public:
 
     bool expandData(const char *newData, size_t len);
 
-    void subscribe(int soc);
+    void subscribe();
 
     void setFull();
 
-    void unsubscribe(int soc);
+    void unsubscribe();
 };
 
 

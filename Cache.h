@@ -21,8 +21,6 @@ public:
 
     CacheEntity *createEntity(const std::string &url);
 
-    void getUpdatedSubs(std::vector<int> &subs);
-
 };
 
 

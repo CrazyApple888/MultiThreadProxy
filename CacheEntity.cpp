@@ -42,7 +42,6 @@ bool CacheEntity::expandData(const char *newData, size_t len) {
     pthread_mutex_lock(&mutex);
     try {
         data.insert(data.end(), newData, newData + len);
-        _isUpdated = true;
         pthread_cond_broadcast(&cond);
         pthread_mutex_unlock(&mutex);
         return true;
@@ -57,18 +56,14 @@ bool CacheEntity::expandData(const char *newData, size_t len) {
 
 CacheEntity::CacheEntity(const std::string &url, bool is_debug) : logger(new Logger(is_debug)) {
     this->TAG = std::string("CacheEntity ") + url;
+    subscribers_counter = new AtomicInt(0);
     pthread_mutex_init(&mutex, nullptr);
     pthread_cond_init(&cond, nullptr);
     logger->debug(TAG, "created");
 }
 
-void CacheEntity::subscribe(int soc) {
-    pthread_mutex_lock(&mutex);
-    subscribers.push_back(soc);
-    pthread_mutex_unlock(&mutex);
-    if (is_full) {
-        //notifySubscribers();
-    }
+void CacheEntity::subscribe() {
+    subscribers_counter->inc();
 }
 
 void CacheEntity::setFull() {
@@ -77,17 +72,8 @@ void CacheEntity::setFull() {
     pthread_mutex_unlock(&mutex);
 }
 
-void CacheEntity::unsubscribe(int soc) {
-    pthread_mutex_lock(&mutex);
-    auto iter = subscribers.begin();
-    for (; iter != subscribers.end(); iter++) {
-        if (soc == (*iter)) {
-            subscribers.erase(iter);
-            logger->debug(TAG, std::to_string(soc) + " is now unsub");
-            break;
-        }
-    }
-    pthread_mutex_unlock(&mutex);
+void CacheEntity::unsubscribe() {
+    subscribers_counter->dec();
 }
 
 bool CacheEntity::isValid() {
@@ -106,24 +92,17 @@ void CacheEntity::setInvalid() {
 
 CacheEntity::~CacheEntity() {
     data.clear();
-    subscribers.clear();
     delete logger;
+    delete subscribers_counter;
 }
 
-std::vector<int> &CacheEntity::getSubscribers() {
+bool CacheEntity::hasSubscribers() {
+    return subscribers_counter->get() > 0;
+}
+
+void CacheEntity::remake() {
     pthread_mutex_lock(&mutex);
-    _isUpdated = false;
+    data.clear();
+    this->is_valid = true;
     pthread_mutex_unlock(&mutex);
-    return subscribers;
-}
-
-bool CacheEntity::isUpdated() {
-    pthread_mutex_lock(&mutex);
-    if (!subscribers.empty() && (is_full || _isUpdated)) {
-        pthread_mutex_unlock(&mutex);
-        return true;
-    } else {
-        pthread_mutex_unlock(&mutex);
-        return false;
-    }
 }

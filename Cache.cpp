@@ -5,7 +5,12 @@
  **/
 CacheEntity *Cache::getEntity(const std::string &url) {
     if (cached_data.contains(url)) {
-        return cached_data.get(url);
+        auto data = cached_data.get(url);
+        if (!data->isValid()) {
+            return nullptr;
+        }
+
+        return data;
     } else {
         return nullptr;
     }
@@ -13,6 +18,11 @@ CacheEntity *Cache::getEntity(const std::string &url) {
 
 CacheEntity *Cache::createEntity(const std::string &url) {
     try {
+        if (cached_data.contains(url)) {
+            auto data = cached_data.get(url);
+            data->remake();
+            return data;
+        }
         cached_data.put(url, new CacheEntity(url, logger->isDebug()));
         return cached_data.get(url);
     } catch (std::exception &exc) {
@@ -34,15 +44,4 @@ Cache::~Cache() {
     cached_data.unlock();
     cached_data.clear();
     delete logger;
-}
-
-void Cache::getUpdatedSubs(std::vector<int> &subs) {
-    cached_data.lock();
-    for (auto &entity : cached_data.getMap()) {
-        if (entity.second->isUpdated()) {
-            auto &_subs = entity.second->getSubscribers();
-            subs.insert(subs.end(), _subs.begin(), _subs.end());
-        }
-    }
-    cached_data.unlock();
 }
