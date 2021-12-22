@@ -8,6 +8,7 @@
 #include <iostream>
 
 #include "CacheEntity.h"
+#include "AtomicInt.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
@@ -18,11 +19,10 @@ private:
     std::string TAG;
     Logger *logger;
     std::string url;
-    bool is_client_subscribed = false;
     CacheEntity *cache = nullptr;
-    bool is_first_run = true;
     std::string request;
     std::string host;
+    AtomicInt *is_finished;
 public:
     int client_soc;
 

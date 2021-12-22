@@ -18,11 +18,13 @@
 #include <algorithm>
 #include <bitset>
 #include <pthread.h>
+#include <csignal>
 
 #include "Logger.h"
 #include "Client.h"
 #include "Server.h"
 #include "Cache.h"
+#include "AtomicInt.h"
 
 class Proxy {
 private:
@@ -33,13 +35,20 @@ private:
     int proxy_socket;
     struct pollfd proxy_fd;
     Cache *cache;
-    bool is_stopped = false;
+
+    AtomicInt *is_working;
 
     int initProxySocket();
 
     void initProxyPollFd();
 
+    int initSigHandler();
+
     Client *acceptClient();
+
+    void joinFinishedThreads();
+
+    void joinAll();
 
 public:
 
@@ -51,9 +60,6 @@ public:
 
     int start(int port);
 
-    Cache *getCache();
-
 };
-
 
 #endif //SINGLETHREADPROXY_PROXY_H

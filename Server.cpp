@@ -8,6 +8,7 @@ Server::Server(const std::string &_request, const std::string &_host, CacheEntit
     this->host = _host;
     TAG = std::string("SERVER " + std::to_string(server_socket));
     logger->debug(TAG, "created");
+    is_finished = new AtomicInt(0);
 }
 
 void Server::sendRequest() {
@@ -18,8 +19,9 @@ void Server::sendRequest() {
         return;
     }
 
-    if ((server_socket = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
+    if ((server_socket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)) < 0) {
         logger->info(TAG, "Can't create socket for host" + host);
+        free(hostinfo);
         return;
     }
 
@@ -37,7 +39,8 @@ void Server::sendRequest() {
     logger->info(TAG, "Connected server to " + host);
     free(hostinfo);
 
-    send(server_socket, request.data(), request.size(), 0);
+    //send(server_socket, request.data(), request.size(), 0);
+    write(server_socket, request.data(), request.size());
 }
 
 Server::~Server() {
@@ -47,7 +50,8 @@ Server::~Server() {
 
 void Server::readFromServer() {
     while (true) {
-        auto len = recv(server_socket, buffer, BUFFER_SIZE, 0);
+        //auto len = recv(server_socket, buffer, BUFFER_SIZE, 0);
+        auto len = read(server_socket, buffer, BUFFER_SIZE);
         if (len < 0) {
             if (cache != nullptr) {
                 cache->setInvalid();
@@ -66,6 +70,5 @@ void Server::readFromServer() {
             cache->setInvalid();
             return;
         }
-
     }
 }

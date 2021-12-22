@@ -36,6 +36,14 @@ public:
 
         return tmp;
     }
+
+    bool equals(int other) {
+        pthread_mutex_lock(&mutex);
+        auto tmp = (value == other);
+        pthread_mutex_unlock(&mutex);
+
+        return tmp;
+    }
 };
 
 #endif //MULTITHREADPROXY_ATOMICINT_H

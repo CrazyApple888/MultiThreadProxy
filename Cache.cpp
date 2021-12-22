@@ -4,6 +4,9 @@
  * @return On success - Entity, otherwise - nullptr
  **/
 CacheEntity *Cache::getEntity(const std::string &url) {
+    if (is_valid->get() != 0) {
+        return nullptr;
+    }
     if (cached_data.contains(url)) {
         auto data = cached_data.get(url);
         if (!data->isValid()) {
@@ -17,6 +20,9 @@ CacheEntity *Cache::getEntity(const std::string &url) {
 }
 
 CacheEntity *Cache::createEntity(const std::string &url) {
+    if (is_valid->get() != 0) {
+        return nullptr;
+    }
     try {
         if (cached_data.contains(url)) {
             auto data = cached_data.get(url);
@@ -44,4 +50,15 @@ Cache::~Cache() {
     cached_data.unlock();
     cached_data.clear();
     delete logger;
+    delete is_valid;
+}
+
+void Cache::setAllInvalid() {
+    is_valid->inc();
+    cached_data.lock();
+    auto &data = cached_data.getMap();
+    for (auto &entry: data) {
+        entry.second->prepareForStop();
+    }
+    cached_data.unlock();
 }

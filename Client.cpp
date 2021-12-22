@@ -1,4 +1,3 @@
-#include <sys/socket.h>
 #include <unistd.h>
 #include "Client.h"
 
@@ -73,6 +72,7 @@ Client::Client(int client_socket, bool is_debug, Cache *_cache) : logger(new Log
     parser.data = this;
 
     logger->debug(TAG, "created and initialized");
+    is_finished = new AtomicInt(0);
 }
 
 /**
@@ -110,7 +110,8 @@ bool Client::readRequest() {
     long len;
     logger->debug(TAG, "Reading request");
     while (!isAllParsed) {
-        len = recv(client_socket, buffer, BUFFER_SIZE, 0);
+        //len = recv(client_socket, buffer, BUFFER_SIZE, 0);
+        len = read(client_socket, buffer, BUFFER_SIZE);
         if (len < 0) {
             logger->info(TAG, "Recv returned value < 0");
             return false;
@@ -138,17 +139,19 @@ void Client::readData() {
 
     if (cached_data == nullptr || !cached_data->isValid()) {
         cached_data->unsubscribe();
+        logger->debug(TAG, "Cache is invalid");
         return;
     }
 
     while (true) {
         auto data = cached_data->getPart(current_pos, read_len);
-        logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
+        //logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
 
         current_pos += read_len;
         ssize_t bytes_sent = 0;
         while (bytes_sent != read_len) {
-            ssize_t sent = send(client_socket, data + bytes_sent, read_len, 0);
+            //ssize_t sent = send(client_socket, data + bytes_sent, read_len, 0);
+            ssize_t sent = write(client_socket, data + bytes_sent, read_len);
             if (0 > sent) {
                 logger->debug(TAG, "Send returned value < 0");
                 cached_data->unsubscribe();
@@ -163,6 +166,7 @@ void Client::readData() {
 
         if ((cached_data->isFull() && current_pos == cached_data->getRecordSize()) || !cached_data->isValid()) {
             cached_data->unsubscribe();
+            logger->debug(TAG, "Cache is read, breaking while");
             break;
         }
     }

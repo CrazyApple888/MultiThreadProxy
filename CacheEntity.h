@@ -28,6 +28,8 @@ public:
 
     void setInvalid();
 
+    void prepareForStop();
+
     bool hasSubscribers();
 
     void remake();

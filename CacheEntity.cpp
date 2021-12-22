@@ -106,3 +106,10 @@ void CacheEntity::remake() {
     this->is_valid = true;
     pthread_mutex_unlock(&mutex);
 }
+
+void CacheEntity::prepareForStop() {
+    pthread_mutex_lock(&mutex);
+    is_valid = false;
+    pthread_cond_broadcast(&cond);
+    pthread_mutex_unlock(&mutex);
+}

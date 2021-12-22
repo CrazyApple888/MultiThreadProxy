@@ -6,6 +6,7 @@
 #include "Logger.h"
 #include "http_parser.h"
 #include "Cache.h"
+#include "AtomicInt.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
@@ -20,6 +21,7 @@ private:
     Cache *cache;
     CacheEntity *cached_data = nullptr;
     size_t current_pos = 0;
+    AtomicInt *is_finished;
 public:
     int client_socket;
     std::string url;

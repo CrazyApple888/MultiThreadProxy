@@ -11,6 +11,7 @@ private:
     ConcurrentMap<std::string, CacheEntity*> cached_data;
     Logger *logger;
     std::string TAG;
+    AtomicInt *is_valid = new AtomicInt(0);
 public:
 
     Cache(bool is_debug);
@@ -20,6 +21,8 @@ public:
     CacheEntity *getEntity(const std::string& url);
 
     CacheEntity *createEntity(const std::string &url);
+
+    void setAllInvalid();
 
 };
 

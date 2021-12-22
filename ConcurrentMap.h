@@ -38,17 +38,13 @@ public:
         return value;
     };
 
-    V getUnsafe(K key) {
-        V value;
-        try {
-            value = data.at(key);
-        } catch (...) {}
-
-        return value;
-    };
-
-    bool containsUnsafe(K key) {
-        return data.find(key) != data.end();
+    void update(K key, V value) {
+        pthread_mutex_lock(&mutex);
+        auto item = data.find(key);
+        if (item != data.end()) {
+            item->second = value;
+        }
+        pthread_mutex_unlock(&mutex);
     }
 
     void removeAt(K key) {
@@ -73,10 +69,6 @@ public:
         pthread_mutex_unlock(&mutex);
     }
 
-    size_t size() {
-        return data.size();
-    };
-
     int lock() {
         return pthread_mutex_lock(&mutex);
     }
@@ -85,7 +77,7 @@ public:
         return pthread_mutex_unlock(&mutex);
     }
 
-    std::map<K, V> getMap() {
+    std::map<K, V> &getMap() {
         return data;
     }
 
