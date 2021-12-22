@@ -22,17 +22,15 @@ private:
     CacheEntity *cache = nullptr;
     std::string request;
     std::string host;
-    AtomicInt *is_finished;
 public:
-    int client_soc;
 
     Server(const std::string &_request, const std::string &_host, CacheEntity *_cache, bool is_debug);
 
     ~Server();
 
-    void sendRequest();
+    bool sendRequest();
 
-    void readFromServer();
+    bool readFromServer();
 };
 
 

@@ -72,7 +72,6 @@ Client::Client(int client_socket, bool is_debug, Cache *_cache) : logger(new Log
     parser.data = this;
 
     logger->debug(TAG, "created and initialized");
-    is_finished = new AtomicInt(0);
 }
 
 /**
@@ -110,7 +109,6 @@ bool Client::readRequest() {
     long len;
     logger->debug(TAG, "Reading request");
     while (!isAllParsed) {
-        //len = recv(client_socket, buffer, BUFFER_SIZE, 0);
         len = read(client_socket, buffer, BUFFER_SIZE);
         if (len < 0) {
             logger->info(TAG, "Recv returned value < 0");
@@ -132,7 +130,7 @@ bool Client::readRequest() {
     return true;
 }
 
-void Client::readData() {
+bool Client::readData() {
     logger->debug(TAG, "Reading data...");
     current_pos = 0;
     unsigned long read_len;
@@ -140,7 +138,7 @@ void Client::readData() {
     if (cached_data == nullptr || !cached_data->isValid()) {
         cached_data->unsubscribe();
         logger->debug(TAG, "Cache is invalid");
-        return;
+        return false;
     }
 
     while (true) {
@@ -150,26 +148,32 @@ void Client::readData() {
         current_pos += read_len;
         ssize_t bytes_sent = 0;
         while (bytes_sent != read_len) {
-            //ssize_t sent = send(client_socket, data + bytes_sent, read_len, 0);
             ssize_t sent = write(client_socket, data + bytes_sent, read_len);
             if (0 > sent) {
                 logger->debug(TAG, "Send returned value < 0");
                 cached_data->unsubscribe();
-                return;
+                return false;
             }
             if (0 == sent) {
                 cached_data->unsubscribe();
-                return;
+                return false;
             }
             bytes_sent += sent;
         }
 
-        if ((cached_data->isFull() && current_pos == cached_data->getRecordSize()) || !cached_data->isValid()) {
+        if ((cached_data->isFull() && current_pos == cached_data->getRecordSize())) {
             cached_data->unsubscribe();
             logger->debug(TAG, "Cache is read, breaking while");
             break;
         }
+        if (!cached_data->isValid()) {
+            cached_data->unsubscribe();
+            logger->debug(TAG, "Cache is invalid, breaking while");
+            return false;
+        }
     }
+
+    return true;
 }
 
 Client::~Client() {

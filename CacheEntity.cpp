@@ -40,6 +40,10 @@ size_t CacheEntity::getRecordSize() {
  */
 bool CacheEntity::expandData(const char *newData, size_t len) {
     pthread_mutex_lock(&mutex);
+    if (!is_valid) {
+        pthread_mutex_unlock(&mutex);
+        return false;
+    }
     try {
         data.insert(data.end(), newData, newData + len);
         pthread_cond_broadcast(&cond);
@@ -92,6 +96,8 @@ void CacheEntity::setInvalid() {
 
 CacheEntity::~CacheEntity() {
     data.clear();
+    pthread_mutex_destroy(&mutex);
+    pthread_cond_destroy(&cond);
     delete logger;
     delete subscribers_counter;
 }

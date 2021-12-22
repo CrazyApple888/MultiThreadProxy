@@ -48,7 +48,6 @@ Cache::~Cache() {
         delete item.second;
     }
     cached_data.unlock();
-    cached_data.clear();
     delete logger;
     delete is_valid;
 }

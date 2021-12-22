@@ -21,7 +21,6 @@ private:
     Cache *cache;
     CacheEntity *cached_data = nullptr;
     size_t current_pos = 0;
-    AtomicInt *is_finished;
 public:
     int client_socket;
     std::string url;
@@ -38,7 +37,7 @@ public:
 
     Client(int client_socket, bool is_debug, Cache *_cache);
 
-    void readData();
+    bool readData();
 
     bool isCacheExist();
 
