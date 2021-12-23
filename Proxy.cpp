@@ -56,13 +56,16 @@ void *clientRoutine(void *arg) {
 
     //If cache exists, read it and die
     if (client->isCacheExist()) {
-        client->createCacheEntity();
+        auto cache = client->createCacheEntity();
+        cache->subscribe();
         if (!client->readData()) {
             pthread_testcancel();
             logger->info(tag, "Read unsuccessful");
+            cache->unsubscribe();
             delete client;
             pthread_exit(nullptr);
         }
+        cache->unsubscribe();
         logger->info(tag, "All data read");
         delete client;
         pthread_exit(nullptr);

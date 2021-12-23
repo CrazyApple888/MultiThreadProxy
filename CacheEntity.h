@@ -38,7 +38,7 @@ public:
 
     ~CacheEntity();
 
-    const char *getPart(unsigned long start, unsigned long& length);
+    const char *getPart(unsigned long start, unsigned long& length, std::vector<char> &targetVector);
 
     size_t getRecordSize();
 

@@ -35,8 +35,18 @@ bool Server::sendRequest() {
     }
     logger->info(TAG, "Connected server to " + host);
 
-    //todo cycle
-    write(server_socket, request.data(), request.size());
+    ssize_t bytes_sent = 0;
+    while (bytes_sent != request.size()) {
+        ssize_t sent = write(server_socket, request.data(), request.size());
+        if (0 > sent) {
+            logger->debug(TAG, "Send returned value < 0");
+            return false;
+        }
+        if (0 == sent) {
+            return false;
+        }
+        bytes_sent += sent;
+    }
 
     return true;
 }

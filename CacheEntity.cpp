@@ -1,12 +1,13 @@
 #include "CacheEntity.h"
 
-const char *CacheEntity::getPart(unsigned long start, unsigned long &length) {
+const char *CacheEntity::getPart(unsigned long start, unsigned long &length, std::vector<char> &targetVector) {
     pthread_mutex_lock(&mutex);
     length = countOutputSize(start);
     while (length <= 0 && !is_full && is_valid) {
         pthread_cond_wait(&cond, &mutex);
         length = countOutputSize(start);
     }
+    targetVector.insert(targetVector.begin(), data.begin() + start, data.begin() + start + length);
     auto _data = data.data() + start;
     pthread_mutex_unlock(&mutex);
 

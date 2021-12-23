@@ -141,14 +141,15 @@ bool Client::readData() {
         return false;
     }
 
+    std::vector<char> readData;
     while (true) {
-        auto data = cached_data->getPart(current_pos, read_len);
+        auto asd = cached_data->getPart(current_pos, read_len, readData);
         //logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
 
         current_pos += read_len;
         ssize_t bytes_sent = 0;
         while (bytes_sent != read_len) {
-            ssize_t sent = write(client_socket, data + bytes_sent, read_len);
+            ssize_t sent = write(client_socket, readData.data() + bytes_sent, read_len);
             if (0 > sent) {
                 logger->debug(TAG, "Send returned value < 0");
                 cached_data->unsubscribe();
