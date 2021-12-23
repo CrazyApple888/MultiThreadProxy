@@ -22,19 +22,32 @@ void *sigintListener(void *arg) {
     return nullptr;
 }
 
+void cleanServer(void *arg) {
+    printf("Server\n");
+    auto *server = (Server *) arg;
+    delete server;
+}
+
+void cleanClient(void *arg) {
+    printf("Client\n");
+    auto *client = (Client *) arg;
+    delete client;
+}
+
 void *serverRoutine(void *arg) {
     auto *server = (Server *) arg;
-    if (nullptr == server) {
+    pthread_cleanup_push(cleanServer, server)
+        if (nullptr == server) {
+            routineStorage->update(pthread_self(), true);
+            pthread_exit(nullptr);
+        }
+
+        if (server->sendRequest()) {
+            server->readFromServer();
+        }
+        delete server;
         routineStorage->update(pthread_self(), true);
-        pthread_exit(nullptr);
-    }
-
-    if (server->sendRequest()) {
-        server->readFromServer();
-    }
-    delete server;
-    routineStorage->update(pthread_self(), true);
-
+    pthread_cleanup_pop(0)
     pthread_exit(nullptr);
 }
 
@@ -44,59 +57,61 @@ void *clientRoutine(void *arg) {
         pthread_exit(nullptr);
     }
 
-    auto *logger = client->getLogger();
-    auto tag = client->getTag();
-    if (!client->readRequest()) {
-        logger->info(tag, "Unable to read request");
-        delete client;
-        pthread_exit(nullptr);
-    }
+    pthread_cleanup_push(cleanClient, client)
+        auto *logger = client->getLogger();
+        auto tag = client->getTag();
+        if (!client->readRequest()) {
+            logger->info(tag, "Unable to read request");
+            delete client;
+            pthread_exit(nullptr);
+        }
 
-    logger->debug(tag, "Getting cache");
-    //If cache exists, read it and die
-    if (client->isCacheExist()) {
-        client->createCacheEntity()->subscribe();
-        if (!client->readData()) {
-            logger->info(tag, "Read unsuccessful");
+        logger->debug(tag, "Getting cache");
+        //If cache exists, read it and die
+        if (client->isCacheExist()) {
+            client->createCacheEntity()->subscribe();
+            if (!client->readData()) {
+                logger->info(tag, "Read unsuccessful");
+                delete client;
+                routineStorage->update(pthread_self(), true);
+                pthread_exit(nullptr);
+            }
+            logger->info(tag, "All data read");
             delete client;
             routineStorage->update(pthread_self(), true);
             pthread_exit(nullptr);
         }
-        logger->info(tag, "All data read");
+
+        //Else
+        auto *cache = client->createCacheEntity();
+        if (cache == nullptr) {
+            logger->debug(tag, "CACHE IS NULLPTR");
+            delete client;
+            routineStorage->update(pthread_self(), true);
+            pthread_exit(nullptr);
+        }
+        cache->subscribe();
+        logger->debug(tag, "Got CacheEntity, creating server routine");
+        auto *server = new Server(client->getRequest(), client->host, cache, client->getLogger()->isDebug());
+        pthread_t server_thread;
+
+        if (0 != pthread_create(&server_thread, nullptr, serverRoutine, (void *) server)) {
+            logger->info(tag, "Unable to start server routine");
+            delete client;
+            routineStorage->update(pthread_self(), true);
+            pthread_exit(nullptr);
+        }
+        routineStorage->put(server_thread, false);
+
+        if (!client->readData()) {
+            logger->debug(tag, "Client read unsuccessful");
+        }
+        logger->info(tag, "Client shutting down");
         delete client;
         routineStorage->update(pthread_self(), true);
-        pthread_exit(nullptr);
-    }
 
-    //Else
-    auto *cache = client->createCacheEntity();
-    if (cache == nullptr) {
-        logger->debug(tag, "CACHE IS NULLPTR");
-        delete client;
-        routineStorage->update(pthread_self(), true);
-        pthread_exit(nullptr);
-    }
-    cache->subscribe();
-    logger->debug(tag, "Got CacheEntity, creating server routine");
-    auto *server = new Server(client->getRequest(), client->host, cache, client->getLogger()->isDebug());
-    pthread_t server_thread;
-
-    if (0 != pthread_create(&server_thread, nullptr, serverRoutine, (void *) server)) {
-        logger->info(tag, "Unable to start server routine");
-        delete client;
-        routineStorage->update(pthread_self(), true);
-        pthread_exit(nullptr);
-    }
-    routineStorage->put(server_thread, false);
-
-    if (!client->readData()) {
-        logger->debug(tag, "Client read unsuccessful");
-    }
-    logger->info(tag, "Client shutting down");
-    delete client;
-    routineStorage->update(pthread_self(), true);
-
-    return nullptr;
+    pthread_cleanup_pop(0)
+    pthread_exit(nullptr);
 }
 
 Proxy::Proxy(bool is_debug) : logger(new Logger(is_debug)) {
@@ -148,6 +163,7 @@ int Proxy::start(int port) {
         joinFinishedThreads();
     }
     cache->setAllInvalid();
+    stopAll();
     joinAll();
     routineStorage->clear();
     delete routineStorage;
@@ -266,7 +282,7 @@ void Proxy::joinFinishedThreads() {
 
 void Proxy::joinAll() {
     logger->debug(TAG, "Starting joining threads...");
-    while(!routineStorage->isEmpty()) {
+    while (!routineStorage->isEmpty()) {
         routineStorage->lock();
         auto entry = routineStorage->getMap().begin();
         routineStorage->unlock();
@@ -276,4 +292,14 @@ void Proxy::joinAll() {
         routineStorage->removeAt(entry->first);
     }
     logger->debug(TAG, "Threads joined");
+}
+
+void Proxy::stopAll() {
+    routineStorage->lock();
+    for (auto &entry : routineStorage->getMap()) {
+        if (0 != pthread_cancel(entry.first)) {
+            logger->info(TAG, "Unable to cancel thread");
+        }
+    }
+    routineStorage->unlock();
 }

@@ -50,6 +50,8 @@ private:
 
     void joinAll();
 
+    void stopAll();
+
 public:
 
     void stop();
