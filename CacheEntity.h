@@ -20,6 +20,7 @@ private:
 
     pthread_mutex_t mutex;
     pthread_cond_t cond;
+
     unsigned long countOutputSize(unsigned long pos);
 
 public:
@@ -38,7 +39,7 @@ public:
 
     ~CacheEntity();
 
-    const char *getPart(unsigned long start, unsigned long& length, std::vector<char> &targetVector);
+    void getPart(unsigned long start, unsigned long &length, std::vector<char> &target_vector);
 
     size_t getRecordSize();
 

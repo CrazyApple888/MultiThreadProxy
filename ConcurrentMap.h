@@ -81,6 +81,14 @@ public:
         return data;
     }
 
+    bool isEmpty() {
+        pthread_mutex_lock(&mutex);
+        bool _is_empty = data.empty();
+        pthread_mutex_unlock(&mutex);
+
+        return _is_empty;
+    }
+
 };
 
 #endif //MULTITHREADPROXY_CONCURRENTMAP_H
