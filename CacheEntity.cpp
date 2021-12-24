@@ -76,6 +76,12 @@ void CacheEntity::setFull() {
 
 void CacheEntity::unsubscribe() {
     subscribers_counter->dec();
+    pthread_mutex_lock(&mutex);
+    if (subscribers_counter->equals(0) && status_code != 200u) {
+        is_valid = false;
+        logger->info(TAG, "Response status != 200, setting status invalid for cache");
+    }
+    pthread_mutex_unlock(&mutex);
 }
 
 bool CacheEntity::isValid() {
@@ -115,5 +121,11 @@ void CacheEntity::prepareForStop() {
     pthread_mutex_lock(&mutex);
     is_valid = false;
     pthread_cond_broadcast(&cond);
+    pthread_mutex_unlock(&mutex);
+}
+
+void CacheEntity::setStatus(unsigned int _status) {
+    pthread_mutex_lock(&mutex);
+    status_code = _status;
     pthread_mutex_unlock(&mutex);
 }

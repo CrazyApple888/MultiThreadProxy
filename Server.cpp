@@ -8,6 +8,8 @@ Server::Server(const std::string &_request, const std::string &_host, CacheEntit
     this->host = _host;
     TAG = std::string("SERVER " + std::to_string(server_socket));
     logger->debug(TAG, "created");
+    http_parser_init(&parser, HTTP_RESPONSE);
+    http_parser_settings_init(&settings);
 }
 
 bool Server::sendRequest() {
@@ -59,7 +61,8 @@ Server::~Server() {
 bool Server::readFromServer() {
     while (true) {
         auto len = read(server_socket, buffer, BUFFER_SIZE);
-        if (len < 0) {
+        auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
+        if (len < 0 || parsed_len != len) {
             if (cache != nullptr) {
                 cache->setInvalid();
             }
@@ -69,6 +72,7 @@ bool Server::readFromServer() {
         if (len == 0) {
             logger->debug(TAG, "Setting status FULL to cache for " + url);
             cache->setFull();
+            cache->setStatus(parser.status_code);
             break;
         }
 

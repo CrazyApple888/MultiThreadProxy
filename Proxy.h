@@ -1,22 +1,15 @@
-#ifndef SINGLETHREADPROXY_PROXY_H
-#define SINGLETHREADPROXY_PROXY_H
+#ifndef MULTITHREADPROXY_PROXY_H
+#define MULTITHREADPROXY_PROXY_H
 
 
 #include <cstdlib>
 #include <poll.h>
-#include <fcntl.h>
 #include <cstdio>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <cerrno>
 #include <cstring>
-#include <set>
-#include <map>
-#include <vector>
 #include <netdb.h>
 #include <sys/un.h>
-#include <algorithm>
-#include <bitset>
 #include <pthread.h>
 #include <csignal>
 
@@ -64,4 +57,4 @@ public:
 
 };
 
-#endif //SINGLETHREADPROXY_PROXY_H
+#endif //MULTITHREADPROXY_PROXY_H

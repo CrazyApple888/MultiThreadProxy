@@ -1,5 +1,5 @@
-#ifndef SINGLETHREADPROXY_CACHE_H
-#define SINGLETHREADPROXY_CACHE_H
+#ifndef MULTITHREADPROXY_CACHE_H
+#define MULTITHREADPROXY_CACHE_H
 
 #include <iostream>
 #include <map>
@@ -27,4 +27,4 @@ public:
 };
 
 
-#endif //SINGLETHREADPROXY_CACHE_H
+#endif //MULTITHREADPROXY_CACHE_H

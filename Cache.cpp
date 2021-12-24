@@ -4,7 +4,7 @@
  * @return On success - Entity, otherwise - nullptr
  **/
 CacheEntity *Cache::getEntity(const std::string &url) {
-    if (is_valid->get() != 0) {
+    if (!is_valid->equals(0)) {
         return nullptr;
     }
     if (cached_data.contains(url)) {
@@ -20,7 +20,7 @@ CacheEntity *Cache::getEntity(const std::string &url) {
 }
 
 CacheEntity *Cache::createEntity(const std::string &url) {
-    if (is_valid->get() != 0) {
+    if (!is_valid->equals(0)) {
         return nullptr;
     }
     try {

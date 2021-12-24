@@ -133,12 +133,12 @@ int Proxy::start(int port) {
     }
     initProxyPollFd();
 
-    while (is_working->get() == 0) {
+    while (is_working->equals(0)) {
         if (poll(&proxy_fd, 1, -1) < 0) {
             logger->info(TAG, "Poll returned value < 0");
             break;
         }
-        if (is_working->get() != 0) {
+        if (!is_working->equals(0)) {
             logger->debug(TAG, "Proxy stopped");
             break;
         }

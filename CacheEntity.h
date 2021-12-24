@@ -1,5 +1,5 @@
-#ifndef SINGLETHREADPROXY_CACHEENTITY_H
-#define SINGLETHREADPROXY_CACHEENTITY_H
+#ifndef MULTITHREADPROXY_CACHEENTITY_H
+#define MULTITHREADPROXY_CACHEENTITY_H
 
 #include <iostream>
 #include <vector>
@@ -17,6 +17,7 @@ private:
     Logger *logger;
     bool is_valid = true;
     AtomicInt *subscribers_counter;
+    unsigned int status_code = 0u;
 
     pthread_mutex_t mutex;
     pthread_cond_t cond;
@@ -52,7 +53,9 @@ public:
     void setFull();
 
     void unsubscribe();
+
+    void setStatus(unsigned int _status);
 };
 
 
-#endif //SINGLETHREADPROXY_CACHEENTITY_H
+#endif //MULTITHREADPROXY_CACHEENTITY_H

@@ -1,5 +1,5 @@
-#ifndef SINGLETHREADPROXY_SERVER_H
-#define SINGLETHREADPROXY_SERVER_H
+#ifndef MULTITHREADPROXY_SERVER_H
+#define MULTITHREADPROXY_SERVER_H
 
 
 #include <sys/socket.h>
@@ -9,6 +9,7 @@
 
 #include "CacheEntity.h"
 #include "AtomicInt.h"
+#include "http_parser.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
@@ -22,6 +23,9 @@ private:
     CacheEntity *cache = nullptr;
     std::string request;
     std::string host;
+
+    http_parser parser {};
+    http_parser_settings settings{};
 public:
 
     Server(const std::string &_request, const std::string &_host, CacheEntity *_cache, bool is_debug);
@@ -34,4 +38,4 @@ public:
 };
 
 
-#endif //SINGLETHREADPROXY_SERVER_H
+#endif //MULTITHREADPROXY_SERVER_H
