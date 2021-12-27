@@ -63,6 +63,7 @@ void *clientRoutine(void *arg) {
         if (!client->readRequest()) {
             logger->info(tag, "Unable to read request");
             delete client;
+            routineStorage->update(pthread_self(), true);
             pthread_exit(nullptr);
         }
 

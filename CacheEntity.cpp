@@ -71,6 +71,7 @@ void CacheEntity::subscribe() {
 void CacheEntity::setFull() {
     pthread_mutex_lock(&mutex);
     is_full = true;
+    pthread_cond_broadcast(&cond);
     pthread_mutex_unlock(&mutex);
 }
 
