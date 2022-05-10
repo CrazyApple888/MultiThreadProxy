@@ -1,41 +1,41 @@
-#ifndef SINGLETHREADPROXY_SERVER_H
-#define SINGLETHREADPROXY_SERVER_H
+#ifndef MULTITHREADPROXY_SERVER_H
+#define MULTITHREADPROXY_SERVER_H
 
 
 #include <sys/socket.h>
+#include <netdb.h>
 #include <string>
 #include <iostream>
 
-#include "Handler.h"
 #include "CacheEntity.h"
-#include "Proxy.h"
+#include "AtomicInt.h"
+#include "http_parser.h"
 
 #define BUFFER_SIZE (BUFSIZ * 5)
 
-class Proxy;
-
-class Server : public Handler {
+class Server {
 private:
     char buffer[BUFFER_SIZE];
     int server_socket;
     std::string TAG;
     Logger *logger;
-    Proxy *proxy;
     std::string url;
-    bool is_client_subscribed = false;
     CacheEntity *cache = nullptr;
-    bool is_first_run = true;
-public:
-    int client_soc;
+    std::string request;
+    std::string host;
 
-    Server(int server_socket, bool is_debug, Proxy *proxy);
+    http_parser parser {};
+    http_parser_settings settings{};
+public:
+
+    Server(const std::string &_request, const std::string &_host, CacheEntity *_cache, bool is_debug);
 
     ~Server();
 
-    bool execute(int event) override;
+    bool sendRequest();
 
-    void sendRequest(const char *url1, const char *headers, const char *method);
+    bool readFromServer();
 };
 
 
-#endif //SINGLETHREADPROXY_SERVER_H
+#endif //MULTITHREADPROXY_SERVER_H

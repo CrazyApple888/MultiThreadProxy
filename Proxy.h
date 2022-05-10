@@ -1,31 +1,23 @@
-#ifndef SINGLETHREADPROXY_PROXY_H
-#define SINGLETHREADPROXY_PROXY_H
+#ifndef MULTITHREADPROXY_PROXY_H
+#define MULTITHREADPROXY_PROXY_H
 
 
 #include <cstdlib>
 #include <poll.h>
-#include <fcntl.h>
 #include <cstdio>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <cerrno>
 #include <cstring>
-#include <set>
-#include <map>
-#include <vector>
 #include <netdb.h>
 #include <sys/un.h>
-#include <algorithm>
-#include <bitset>
+#include <pthread.h>
+#include <csignal>
 
 #include "Logger.h"
-#include "Handler.h"
 #include "Client.h"
+#include "Server.h"
 #include "Cache.h"
-
-class Client;
-
-class Cache;
+#include "AtomicInt.h"
 
 class Proxy {
 private:
@@ -34,22 +26,24 @@ private:
     const int backlog = 20;
     int proxy_port;
     int proxy_socket;
-    std::vector<struct pollfd> clientsPollFd;
-    std::map<int, Handler *> handlers;
+    struct pollfd proxy_fd;
     Cache *cache;
-    bool is_stopped = false;
+
+    AtomicInt *is_working;
 
     int initProxySocket();
 
     void initProxyPollFd();
 
-    void acceptClient();
+    int initSigHandler();
 
-    void initClientPollFd(int socket);
+    Client *acceptClient();
 
-    void testRead(int fd);
+    void joinFinishedThreads();
 
-    void disconnectClient(pollfd client, size_t index);
+    void joinAll();
+
+    void stopAll();
 
 public:
 
@@ -61,19 +55,6 @@ public:
 
     int start(int port);
 
-    bool createServerConnection(const std::string &host, Client *client);
-
-    void disconnectSocket(int soc);
-
-    void notify(int soc);
-
-    Cache *getCache();
-
-    void addCacheToClient(int soc, CacheEntity *cache_entity);
-
-    void disableSoc(int soc);
-
 };
 
-
-#endif //SINGLETHREADPROXY_PROXY_H
+#endif //MULTITHREADPROXY_PROXY_H

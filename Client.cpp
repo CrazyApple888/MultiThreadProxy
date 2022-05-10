@@ -1,3 +1,4 @@
+#include <unistd.h>
 #include "Client.h"
 
 int onUrl(http_parser *parser, const char *at, size_t length) {
@@ -24,9 +25,7 @@ int onHeaderValue(http_parser *parser, const char *at, size_t length) {
     auto client = (Client *) parser->data;
     auto value = std::string(at, length);
     if (client->h_field == "Host") {
-        if (!client->createServerConnection(value)) {
-            return 1;
-        }
+        client->host = value;
     }
     if ("Connection" == client->h_field) {
         value = "close";
@@ -37,9 +36,9 @@ int onHeaderValue(http_parser *parser, const char *at, size_t length) {
 }
 
 int onHeadersComplete(http_parser *parser) {
-    //todo rewrite me
     auto client = (Client *) parser->data;
     client->headers.append("\r\n");
+    client->isAllParsed = true;
     client->getLogger()->debug(client->getTag(), "All headers parsed");
     client->getLogger()->debug(client->getTag(), "method = " + std::to_string(parser->method));
     switch (parser->method) {
@@ -52,14 +51,13 @@ int onHeadersComplete(http_parser *parser) {
         default:
             return 1;
     }
-    client->sendServerRequest();
+
     return 0;
 }
 
-Client::Client(int client_socket, bool is_debug, Proxy *proxy) : logger(new Logger(is_debug)) {
-    ///-------------------Initializing fields-------------------
+Client::Client(int client_socket, bool is_debug, Cache *_cache) : logger(new Logger(is_debug)) {
+    this->cache = _cache;
     this->client_socket = client_socket;
-    this->proxy = proxy;
     TAG = std::string("Client " + std::to_string(client_socket));
 
     ///---------Initializing parser settings---------
@@ -76,115 +74,111 @@ Client::Client(int client_socket, bool is_debug, Proxy *proxy) : logger(new Logg
     logger->debug(TAG, "created and initialized");
 }
 
-bool Client::execute(int event) {
-    if (event & POLLIN) {
-        logger->debug(TAG, "EXECUTE POLLIN, event = " + std::to_string(event | POLLIN));
-        return readRequest();
+/**
+ * Creates CacheEntity if it doesn't exist
+ * @return CacheEntity* or nullptr if no enough space
+ */
+CacheEntity *Client::createCacheEntity() {
+    if ((this->cached_data = cache->getEntity(this->url)) == nullptr) {
+        this->cached_data = cache->createEntity(url);
     }
 
-    if (event & POLLOUT) {
-        logger->debug(TAG, "EXECUTE POLLOUT, event = " + std::to_string(event | POLLOUT));
-        return readAnswer();
-    }
+    return this->cached_data;
+}
 
-    return false;
+bool Client::isCacheExist() {
+    if (cache->getEntity(this->url) == nullptr) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+std::string Client::getRequest() {
+    std::string get_this;
+    get_this.append(method);
+    get_this.append(" ");
+    get_this.append(url);
+    get_this.append(" HTTP/1.0\r\n");
+    get_this.append(headers);
+
+    return get_this;
 }
 
 bool Client::readRequest() {
-    auto len = recv(client_socket, buffer, BUFFER_SIZE, 0);
-    //todo >
-    if (0 >= len) {
-        logger->debug(TAG, "len from recv <= 0");
-        return false;
-    }
-    auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
-    if (parsed_len != len || 0u != parser.http_errno) {
-        logger->debug(TAG, "parser errno = " + std::to_string(parser.http_errno));
-        return false;
-    }
-
-    return true;
-}
-
-bool Client::readAnswer() {
-    logger->debug(TAG, "READING FROM CACHE");
-    if (nullptr == cached_data) {
-        logger->info(TAG, "BROKEN CACHE");
-        proxy->disableSoc(client_socket);
-        return true;
-        //return false;
-    }
-    if (!cached_data->isValid()) {
-        logger->info(TAG, "Cache invalid, shutting down");
-        cached_data->unsubscribe(client_socket);
-        return false;
-    }
-    auto cache_len = cached_data->getRecordSize();
-    size_t read_len;
-    if (cache_len - current_pos > BUFFER_SIZE) {
-        read_len = BUFFER_SIZE;
-    } else {
-        read_len = cache_len - current_pos;
-    }
-    if (read_len == 0) {
-        logger->debug(TAG, "No new data in cache");
-        if (!cached_data->isFull()) {
-            proxy->disableSoc(client_socket);
-        } else {
+    long len;
+    logger->debug(TAG, "Reading request");
+    while (!isAllParsed) {
+        len = read(client_socket, buffer, BUFFER_SIZE);
+        if (len < 0) {
+            logger->info(TAG, "Recv returned value < 0");
             return false;
         }
-        return true;
-    }
-    logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
-    auto data = cached_data->getPart(current_pos, read_len);
-    current_pos += read_len;
-    ssize_t bytes_sent = 0;
-    while (bytes_sent != read_len) {
-        ssize_t sent = send(client_socket, data + bytes_sent, read_len, 0);
-        if (0 > sent) {
-            cached_data->unsubscribe(client_socket);
-            logger->debug(TAG, "Unsubing");
-            return false;
-        }
-        if (0 == sent) {
+        if (len == 0) {
+            logger->debug(TAG, "No data from server");
             break;
         }
-        bytes_sent += sent;
+        logger->info(TAG, "ab");
+        auto parsed_len = http_parser_execute(&parser, &settings, buffer, len);
+        if (parsed_len != len || 0u != parser.http_errno) {
+            logger->debug(TAG, "parser errno = " + std::to_string(parser.http_errno));
+            return false;
+        }
     }
-
-    if (cached_data->isFull() && current_pos == cached_data->getRecordSize()) {
-        logger->debug(TAG, "Reading completed");
-        cached_data->unsubscribe(client_socket);
-        return false;
-    }
-
-    logger->debug(TAG, "Completed reading from cache");
-
-    if (!cached_data->isFull()) {
-        proxy->disableSoc(client_socket);
-    }
+    logger->info(TAG, "Request is read");
 
     return true;
 }
 
-bool Client::createServerConnection(const std::string &host) {
-    return proxy->createServerConnection(host, this);
-}
+bool Client::readData() {
+    logger->debug(TAG, "Reading data...");
+    current_pos = 0;
+    unsigned long read_len;
 
-void Client::addServer(Server *ser) {
-    this->server = ser;
-}
+    if (cached_data == nullptr || !cached_data->isValid()) {
+        cached_data->unsubscribe();
+        logger->debug(TAG, "Cache is invalid");
+        return false;
+    }
 
-void Client::sendServerRequest() {
-    server->sendRequest(url.data(), headers.data(), method.data());
-}
+    std::vector<char> read_data;
+    while (true) {
+        read_data.clear();
+        cached_data->getPart(current_pos, read_len, read_data);
+        //logger->debug(TAG, "Read " + std::to_string(read_len) + " bytes");
 
-void Client::addCache(CacheEntity *cache) {
-    logger->debug(TAG, "Trying to add cache");
-    cached_data = cache;
-    logger->debug(TAG, "Cache added");
+        current_pos += read_len;
+        ssize_t bytes_sent = 0;
+        while (bytes_sent != read_len) {
+            ssize_t sent = write(client_socket, read_data.data() + bytes_sent, read_len);
+            if (0 > sent) {
+                logger->debug(TAG, "Send returned value < 0");
+                cached_data->unsubscribe();
+                return false;
+            }
+            if (0 == sent) {
+                cached_data->unsubscribe();
+                return false;
+            }
+            bytes_sent += sent;
+        }
+
+        if ((cached_data->isFull() && current_pos == cached_data->getRecordSize())) {
+            cached_data->unsubscribe();
+            logger->debug(TAG, "Cache is read, breaking while");
+            break;
+        }
+        if (!cached_data->isValid()) {
+            cached_data->unsubscribe();
+            logger->debug(TAG, "Cache is invalid, breaking while");
+            return false;
+        }
+    }
+
+    return true;
 }
 
 Client::~Client() {
+    close(client_socket);
     delete logger;
 }
